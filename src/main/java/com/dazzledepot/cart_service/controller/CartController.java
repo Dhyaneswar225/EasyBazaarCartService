@@ -65,8 +65,10 @@ public class CartController {
             Cart cart = cartRepo.findById(userId).orElse(new Cart(userId));
             if (request.getItems() != null && !request.getItems().isEmpty()) {
                 for (Cart.CartItem item : request.getItems()) {
-                    if (item.getProductId() != null) {
+                    if (item.getProductId() != null) { // Check for null productId
                         cart.getItems().removeIf(i -> i.getProductId().equals(item.getProductId()));
+                    } else {
+                        logger.warn("Skipping removal: productId is null for item: {}", item);
                     }
                 }
             } else {
@@ -78,4 +80,32 @@ public class CartController {
             throw e;
         }
     }
+    @PostMapping("/update")
+    public Cart updateQuantity(@RequestBody Cart.CartItem item) {
+        try {
+            String userId = item.getUserId();
+            logger.info("Updating quantity for productId: {} in cart for userId: {}", item.getProductId(), userId);
+            Query query = new Query(Criteria.where("userId").is(userId));
+            Cart cart = cartRepo.findById(userId).orElse(new Cart(userId));
+
+            // Find and update the existing item
+            boolean itemUpdated = false;
+            for (Cart.CartItem existingItem : cart.getItems()) {
+                if (existingItem.getProductId() != null && existingItem.getProductId().equals(item.getProductId())) {
+                    existingItem.setQuantity(Math.max(1, item.getQuantity())); // Ensure quantity doesn't go below 1
+                    itemUpdated = true;
+                    break;
+                }
+            }
+            if (!itemUpdated && item.getProductId() != null) {
+                cart.getItems().add(item); // Add new item if not found
+            }
+
+            return cartRepo.save(cart);
+        } catch (Exception e) {
+            logger.error("Error updating quantity in cart: {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+    
 }
